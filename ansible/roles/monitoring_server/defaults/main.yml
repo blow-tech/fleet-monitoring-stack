@@ -1,0 +1,5 @@
+---
+monitoring_install_dir: /opt/monitoring
+grafana_admin_user: admin
+grafana_admin_password: "CHANGE_ME_VIA_ANSIBLE_VAULT"
+monitoring_allowed_source_cidr: "10.0.0.0/8"

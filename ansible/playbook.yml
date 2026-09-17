@@ -1,0 +1,32 @@
+---
+# playbook.yml
+# Deploys the full monitoring stack and fleet baseline.
+#
+# Usage:
+#   ansible-playbook -i inventory/hosts.ini playbook.yml --check --diff   # dry run
+#   ansible-playbook -i inventory/hosts.ini playbook.yml
+#   ansible-playbook -i inventory/hosts.ini playbook.yml --limit fleet
+#   ansible-playbook -i inventory/hosts.ini playbook.yml --ask-vault-pass  # if using vaulted vars
+#
+# Order matters: baseline hardening first, then node_exporter on the fleet,
+# then the monitoring server last (so its templated prometheus.yml can read
+# every fleet host's gathered facts from this same run).
+
+- name: Apply baseline hardening to every managed host
+  hosts: linux_fleet
+  become: true
+  gather_facts: true
+  roles:
+    - common_baseline
+
+- name: Install node_exporter on fleet VMs
+  hosts: fleet
+  become: true
+  roles:
+    - node_exporter
+
+- name: Deploy monitoring stack (Prometheus/Grafana/Alertmanager) on the monitoring host
+  hosts: monitoring
+  become: true
+  roles:
+    - monitoring_server

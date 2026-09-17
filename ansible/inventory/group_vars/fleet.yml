@@ -1,0 +1,9 @@
+---
+# ansible/inventory/group_vars/fleet.yml
+# Overrides for the [fleet] group only — the 10-20+ managed VMs.
+
+# node_exporter on each fleet VM only needs to accept scrapes from the
+# monitoring host — not from the whole subnet. The node_exporter role
+# builds this into a firewalld rich rule using hostvars of the [monitoring]
+# group, so it stays correct even if the monitoring host's IP changes.
+fleet_environment: "production"

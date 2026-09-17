@@ -1,0 +1,38 @@
+# Reference config for running the stack standalone (docker compose up) for
+# local testing. In real deployments, the Ansible role `monitoring_server`
+# overwrites this file from templates/prometheus.yml.j2, generating the
+# `node_exporter_fleet` target list automatically from the inventory's
+# [fleet] group — so adding/removing VMs from inventory and re-running the
+# playbook keeps monitoring in sync without hand-editing this file.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  - job_name: "monitoring_host_node_exporter"
+    static_configs:
+      - targets: ["host.docker.internal:9100"]
+
+  - job_name: "node_exporter_fleet"
+    static_configs:
+      # Example placeholders — replaced with real inventory hosts when
+      # deployed via Ansible. See ansible/roles/monitoring_server/templates/prometheus.yml.j2
+      - targets:
+          - "vm-prod-01.example.local:9100"
+          - "vm-prod-02.example.local:9100"
+        labels:
+          environment: "example"

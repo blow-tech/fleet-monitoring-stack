@@ -1,0 +1,185 @@
+---
+# tasks/main.yml — role: common_baseline
+# Applied to every host (monitoring + fleet). Idempotent baseline hardening:
+# timezone/NTP, admin accounts, SSH hardening (opt-in flags), firewalld
+# default posture, MOTD, and unattended security patching.
+#
+# CAUTION: baseline_disable_ssh_password_auth flips password auth off
+# fleet-wide. Only enable it after confirming key-based access works for
+# every admin user — see the warning in group_vars/all.yml.
+
+- name: Set timezone
+  community.general.timezone:
+    name: "{{ baseline_timezone }}"
+
+- name: Install chrony for NTP
+  ansible.builtin.dnf:
+    name: chrony
+    state: present
+
+- name: Configure NTP servers
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: /etc/chrony.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: baseline_ntp_servers | length > 0
+  notify: restart chronyd
+
+- name: Ensure chronyd is enabled and running
+  ansible.builtin.systemd:
+    name: chronyd
+    enabled: true
+    state: started
+
+- name: Create admin groups
+  ansible.builtin.group:
+    name: opsadmins
+    state: present
+
+- name: Create admin users
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    groups: opsadmins,wheel
+    append: true
+    password: "{{ item.password_hash }}"
+    shell: /bin/bash
+    create_home: true
+  loop: "{{ baseline_admin_users }}"
+  no_log: true
+
+- name: Deploy SSH authorized_keys for admin users
+  ansible.posix.authorized_key:
+    user: "{{ item.name }}"
+    key: "{{ item.ssh_authorized_key }}"
+    state: present
+  loop: "{{ baseline_admin_users }}"
+  when: item.ssh_authorized_key is defined and item.ssh_authorized_key | length > 0
+
+- name: Grant passwordless sudo to opsadmins group (opt-in)
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/opsadmins
+    content: "%opsadmins ALL=(ALL) NOPASSWD: ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+  when: baseline_sudo_nopasswd | bool
+
+- name: Remove passwordless sudo file if disabled
+  ansible.builtin.file:
+    path: /etc/sudoers.d/opsadmins
+    state: absent
+  when: not (baseline_sudo_nopasswd | bool)
+
+- name: Harden sshd_config — disable direct root login
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PermitRootLogin'
+    line: "PermitRootLogin no"
+    validate: "sshd -t -f %s"
+  when: baseline_disable_root_ssh_login | bool
+  notify: restart sshd
+
+- name: Harden sshd_config — disable password authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PasswordAuthentication'
+    line: "PasswordAuthentication no"
+    validate: "sshd -t -f %s"
+  when: baseline_disable_ssh_password_auth | bool
+  notify: restart sshd
+
+- name: Install fail2ban
+  ansible.builtin.dnf:
+    name: fail2ban
+    state: present
+
+- name: Enable fail2ban sshd jail
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/jail.d/sshd.local
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 5
+      findtime = 10m
+      bantime = 1h
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart fail2ban
+
+- name: Ensure fail2ban is enabled and running
+  ansible.builtin.systemd:
+    name: fail2ban
+    enabled: true
+    state: started
+
+- name: Ensure firewalld is installed and running
+  ansible.builtin.dnf:
+    name: firewalld
+    state: present
+
+- name: Enable and start firewalld
+  ansible.builtin.systemd:
+    name: firewalld
+    enabled: true
+    state: started
+
+- name: Allow SSH through firewalld (always)
+  ansible.posix.firewalld:
+    service: ssh
+    permanent: true
+    state: enabled
+    immediate: true
+
+- name: Allow additional baseline services through firewalld
+  ansible.posix.firewalld:
+    service: "{{ item }}"
+    permanent: true
+    state: enabled
+    immediate: true
+  loop: "{{ baseline_firewall_extra_services }}"
+
+- name: Ensure SELinux is enforcing
+  ansible.posix.selinux:
+    policy: targeted
+    state: enforcing
+  register: selinux_result
+  failed_when: false
+
+- name: Warn if SELinux could not be set to enforcing
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: SELinux is not enforcing on {{ inventory_hostname }}.
+      Investigate before treating this host as production-hardened.
+  when: selinux_result is failed or (selinux_result.state is defined and selinux_result.state != 'enforcing')
+
+- name: Enable dnf-automatic for unattended security patching
+  ansible.builtin.dnf:
+    name: dnf-automatic
+    state: present
+  when: baseline_enable_dnf_automatic | bool
+
+- name: Configure dnf-automatic for security-only updates
+  ansible.builtin.lineinfile:
+    path: /etc/dnf/automatic.conf
+    regexp: '^upgrade_type'
+    line: "upgrade_type = security"
+  when: baseline_enable_dnf_automatic | bool
+
+- name: Enable dnf-automatic timer
+  ansible.builtin.systemd:
+    name: dnf-automatic.timer
+    enabled: true
+    state: started
+  when: baseline_enable_dnf_automatic | bool
+
+- name: Deploy MOTD banner
+  ansible.builtin.template:
+    src: motd.j2
+    dest: /etc/motd
+    owner: root
+    group: root
+    mode: "0644"

@@ -1,0 +1,96 @@
+---
+# tasks/main.yml — role: node_exporter
+# Installs node_exporter as a systemd service, restricted to accept scrapes
+# only from the monitoring host (via firewalld rich rule), not the whole
+# subnet. Applied to the [fleet] group — the monitoring host gets its own
+# node-exporter via the Docker Compose stack instead (see monitoring_server
+# role), so this role is NOT applied to the [monitoring] group.
+
+- name: Create node_exporter system user
+  ansible.builtin.user:
+    name: "{{ node_exporter_user }}"
+    system: true
+    shell: /sbin/nologin
+    create_home: false
+
+- name: Check if node_exporter binary is already at the target version
+  ansible.builtin.command: "{{ node_exporter_install_dir }}/node_exporter --version"
+  register: node_exporter_current
+  changed_when: false
+  failed_when: false
+
+- name: Download node_exporter checksums file
+  ansible.builtin.get_url:
+    url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/sha256sums.txt"
+    dest: "/tmp/node_exporter_{{ node_exporter_version }}_sha256sums.txt"
+    mode: "0644"
+  when: node_exporter_version not in (node_exporter_current.stderr | default(''))
+  register: node_exporter_checksums
+
+- name: Extract expected checksum for this host's architecture
+  ansible.builtin.shell: >
+    grep "linux-amd64.tar.gz" /tmp/node_exporter_{{ node_exporter_version }}_sha256sums.txt | awk '{print $1}'
+  register: node_exporter_expected_sha256
+  changed_when: false
+  when: node_exporter_checksums is changed
+
+- name: Download and extract node_exporter (checksum-verified)
+  ansible.builtin.unarchive:
+    src: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    dest: /tmp
+    remote_src: true
+    checksum: "sha256:{{ node_exporter_expected_sha256.stdout }}"
+  when: node_exporter_checksums is changed
+  notify: restart node_exporter
+
+- name: Install node_exporter binary
+  ansible.builtin.copy:
+    src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
+    dest: "{{ node_exporter_install_dir }}/node_exporter"
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  when: node_exporter_checksums is changed
+  notify: restart node_exporter
+
+- name: Deploy node_exporter systemd unit
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart node_exporter
+
+- name: Enable and start node_exporter
+  ansible.builtin.systemd:
+    name: node_exporter
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Allow node_exporter port only from the monitoring host
+  # firewalld needs a real IP, not a hostname — uses the monitoring host's
+  # gathered fact (requires gather_facts: true in the play, and the
+  # monitoring host to have already been reached at least once so facts
+  # exist in hostvars; run the playbook against [monitoring] first if this
+  # errors on a completely fresh inventory).
+  ansible.posix.firewalld:
+    rich_rule: >-
+      rule family="ipv4"
+      source address="{{ hostvars[groups['monitoring'][0]]['ansible_default_ipv4']['address'] }}/32"
+      port protocol="tcp" port="{{ node_exporter_port }}" accept
+    permanent: true
+    state: enabled
+    immediate: true
+  notify: reload firewalld
+
+- name: Clean up downloaded archive and checksums file
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64"
+    - "/tmp/node_exporter_{{ node_exporter_version }}_sha256sums.txt"
+  when: node_exporter_checksums is changed

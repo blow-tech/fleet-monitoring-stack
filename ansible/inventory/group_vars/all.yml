@@ -1,0 +1,45 @@
+---
+# ansible/inventory/group_vars/all.yml
+# Applies to every host in [linux_fleet] (monitoring + fleet).
+
+# --- common_baseline role ---
+baseline_timezone: "UTC"
+baseline_ntp_servers:
+  - 0.pool.ntp.org
+  - 1.pool.ntp.org
+
+# Admin accounts created on every host with sudo (NOPASSWD off by default —
+# these users still need to enter their own password for sudo unless you
+# set baseline_sudo_nopasswd: true below).
+baseline_admin_users:
+  - name: opsadmin
+    # Generate with: python3 -c "import crypt; print(crypt.crypt('changeme', crypt.mksalt(crypt.METHOD_SHA512)))"
+    # Never commit a real hash — pull this from ansible-vault in practice.
+    password_hash: "$6$replace$with$a$real$sha512$hash$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"
+    ssh_authorized_key: "ssh-ed25519 AAAA...replace-with-real-public-key opsadmin@workstation"
+
+baseline_sudo_nopasswd: false
+
+# SSH hardening — kept as explicit opt-in flags so a first run against real
+# hosts can't accidentally lock you out before you've confirmed key-based
+# access works.
+baseline_disable_root_ssh_login: true
+baseline_disable_ssh_password_auth: false   # flip to true only after confirming key auth works for all admins
+
+# Ports firewalld leaves open on every host beyond SSH (22 always allowed)
+baseline_firewall_extra_services: []
+
+# Security patching cadence via dnf-automatic (installs security updates only, unattended)
+baseline_enable_dnf_automatic: true
+
+# --- node_exporter role ---
+node_exporter_version: "1.8.2"
+node_exporter_port: 9100
+
+# --- monitoring_server role ---
+monitoring_install_dir: /opt/monitoring
+grafana_admin_user: admin
+# Set the real value via ansible-vault, e.g.:
+#   ansible-vault encrypt_string 'S3cur3Pass!' --name 'grafana_admin_password'
+# then paste the output into group_vars/monitoring.yml (vaulted) or a vault file.
+grafana_admin_password: "CHANGE_ME_VIA_ANSIBLE_VAULT"

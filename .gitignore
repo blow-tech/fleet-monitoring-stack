@@ -1,0 +1,15 @@
+# Never commit real secrets
+docker/.env
+ansible/inventory/hosts.ini.local
+ansible/inventory/host_vars/
+ansible/*.retry
+.vault_pass
+
+# Docker/Grafana/Prometheus runtime data if run locally
+docker/prometheus-data/
+docker/grafana-data/
+docker/alertmanager-data/
+
+# OS/editor cruft
+.DS_Store
+*.swp

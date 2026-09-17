@@ -1,0 +1,125 @@
+---
+# tasks/main.yml — role: monitoring_server
+# Applied only to the [monitoring] group (typically one host). Installs
+# Docker CE + Compose plugin, deploys the docker/ stack from this repo, and
+# templates prometheus.yml from the live inventory so the [fleet] group's
+# targets stay in sync on every playbook run.
+
+- name: Add Docker CE repo
+  ansible.builtin.yum_repository:
+    name: docker-ce
+    description: Docker CE Stable
+    baseurl: "https://download.docker.com/linux/centos/$releasever/$basearch/stable"
+    gpgcheck: true
+    gpgkey: "https://download.docker.com/linux/centos/gpg"
+
+- name: Install Docker CE + Compose plugin
+  ansible.builtin.dnf:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+
+- name: Enable and start Docker
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Create install directory structure
+  ansible.builtin.file:
+    path: "{{ monitoring_install_dir }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - ""
+    - prometheus
+    - alertmanager
+    - grafana/provisioning/datasources
+    - grafana/provisioning/dashboards/json
+
+- name: Deploy docker-compose.yml
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../docker/docker-compose.yml"
+    dest: "{{ monitoring_install_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: Deploy alertmanager.yml
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../docker/alertmanager/alertmanager.yml"
+    dest: "{{ monitoring_install_dir }}/alertmanager/alertmanager.yml"
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: Deploy Grafana datasource provisioning
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../docker/grafana/provisioning/datasources/datasource.yml"
+    dest: "{{ monitoring_install_dir }}/grafana/provisioning/datasources/datasource.yml"
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: Deploy Grafana dashboard provider config
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../docker/grafana/provisioning/dashboards/dashboard.yml"
+    dest: "{{ monitoring_install_dir }}/grafana/provisioning/dashboards/dashboard.yml"
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: Deploy Grafana dashboard JSON files
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../docker/grafana/provisioning/dashboards/json/"
+    dest: "{{ monitoring_install_dir }}/grafana/provisioning/dashboards/json/"
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: Template prometheus.yml from live inventory
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ monitoring_install_dir }}/prometheus/prometheus.yml"
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: Template .env (Grafana credentials)
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ monitoring_install_dir }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Allow monitoring ports through firewalld (scoped to allowed CIDR)
+  ansible.posix.firewalld:
+    rich_rule: >-
+      rule family="ipv4"
+      source address="{{ monitoring_allowed_source_cidr }}"
+      port protocol="tcp" port="{{ item }}" accept
+    permanent: true
+    state: enabled
+    immediate: true
+  loop:
+    - "3000"  # Grafana
+    - "9090"  # Prometheus
+    - "9093"  # Alertmanager
+  notify: reload firewalld
+
+- name: Flush handlers so compose files are in place before starting the stack
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure the stack is up (idempotent — no-op if already running with same config)
+  ansible.builtin.command: docker compose up -d
+  args:
+    chdir: "{{ monitoring_install_dir }}"
+  register: compose_result
+  changed_when: "'Started' in compose_result.stdout or 'Created' in compose_result.stdout"

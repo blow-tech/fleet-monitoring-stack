@@ -1,0 +1,33 @@
+# Managed by Ansible role monitoring_server — do not edit by hand on the
+# server; edit inventory (add/remove [fleet] hosts) and re-run the playbook.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  - job_name: "monitoring_host_node_exporter"
+    static_configs:
+      - targets: ["host.docker.internal:{{ node_exporter_port | default(9100) }}"]
+
+  - job_name: "node_exporter_fleet"
+    static_configs:
+      - targets:
+{% for host in groups['fleet'] %}
+          - "{{ hostvars[host]['ansible_host'] | default(host) }}:{{ node_exporter_port | default(9100) }}"
+{% endfor %}
+        labels:
+          environment: "{{ fleet_environment | default('production') }}"
