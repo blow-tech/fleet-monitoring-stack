@@ -1,0 +1,11 @@
+# Fix GitHub Linguist: Ansible YAML files are heavily templated with Jinja
+# expressions ({{ ... }}), which confuses Linguist's classifier into
+# reporting the whole repo as "Jinja" instead of showing YAML/Shell/Docker.
+# These overrides force correct classification for the repo's language stats.
+
+*.yml   linguist-language=YAML
+*.yaml  linguist-language=YAML
+*.j2    linguist-language=Jinja
+*.ini   linguist-language=INI
+Dockerfile linguist-language=Dockerfile
+docker-compose.yml linguist-language=YAML

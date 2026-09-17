@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  yaml-lint:
+    name: YAML lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install yamllint
+        run: pip install yamllint
+      - name: Lint all YAML files
+        run: yamllint ansible docker
+
+  ansible-syntax-check:
+    name: Ansible syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Ansible + required collections
+        run: |
+          pip install ansible
+          ansible-galaxy collection install -r ansible/requirements.yml
+      - name: ansible-playbook --syntax-check
+        working-directory: ansible
+        run: ansible-playbook -i inventory/hosts.ini playbook.yml --syntax-check
+      - name: ansible-lint
+        run: |
+          pip install ansible-lint
+          ansible-lint ansible/playbook.yml || true
+        # non-blocking for now — flip to a hard failure once the existing
+        # findings are triaged and the role set stabilizes
+
+  compose-validate:
+    name: Docker Compose config validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create dummy .env for validation
+        run: cp docker/.env.example docker/.env
+      - name: Validate compose file (no images pulled)
+        working-directory: docker
+        run: docker compose config --quiet
+
+  dashboard-json-validate:
+    name: Grafana dashboard JSON validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate all dashboard JSON files parse
+        run: |
+          for f in docker/grafana/provisioning/dashboards/json/*.json; do
+            echo "Checking $f"
+            python3 -m json.tool "$f" > /dev/null
+          done

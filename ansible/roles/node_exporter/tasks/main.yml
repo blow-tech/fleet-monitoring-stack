@@ -29,7 +29,10 @@
 
 - name: Extract expected checksum for this host's architecture
   ansible.builtin.shell: >
+    set -o pipefail &&
     grep "linux-amd64.tar.gz" /tmp/node_exporter_{{ node_exporter_version }}_sha256sums.txt | awk '{print $1}'
+  args:
+    executable: /bin/bash
   register: node_exporter_expected_sha256
   changed_when: false
   when: node_exporter_checksums is changed
@@ -41,7 +44,7 @@
     remote_src: true
     checksum: "sha256:{{ node_exporter_expected_sha256.stdout }}"
   when: node_exporter_checksums is changed
-  notify: restart node_exporter
+  notify: Restart node_exporter
 
 - name: Install node_exporter binary
   ansible.builtin.copy:
@@ -52,7 +55,7 @@
     mode: "0755"
     remote_src: true
   when: node_exporter_checksums is changed
-  notify: restart node_exporter
+  notify: Restart node_exporter
 
 - name: Deploy node_exporter systemd unit
   ansible.builtin.template:
@@ -61,7 +64,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: restart node_exporter
+  notify: Restart node_exporter
 
 - name: Enable and start node_exporter
   ansible.builtin.systemd:
@@ -84,7 +87,7 @@
     permanent: true
     state: enabled
     immediate: true
-  notify: reload firewalld
+  notify: Reload firewalld
 
 - name: Clean up downloaded archive and checksums file
   ansible.builtin.file:

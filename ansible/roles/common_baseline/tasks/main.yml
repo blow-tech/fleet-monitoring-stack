@@ -25,7 +25,7 @@
     group: root
     mode: "0644"
   when: baseline_ntp_servers | length > 0
-  notify: restart chronyd
+  notify: Restart chronyd
 
 - name: Ensure chronyd is enabled and running
   ansible.builtin.systemd:
@@ -80,7 +80,7 @@
     line: "PermitRootLogin no"
     validate: "sshd -t -f %s"
   when: baseline_disable_root_ssh_login | bool
-  notify: restart sshd
+  notify: Restart sshd
 
 - name: Harden sshd_config — disable password authentication
   ansible.builtin.lineinfile:
@@ -89,7 +89,7 @@
     line: "PasswordAuthentication no"
     validate: "sshd -t -f %s"
   when: baseline_disable_ssh_password_auth | bool
-  notify: restart sshd
+  notify: Restart sshd
 
 - name: Install fail2ban
   ansible.builtin.dnf:
@@ -108,7 +108,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: restart fail2ban
+  notify: Restart fail2ban
 
 - name: Ensure fail2ban is enabled and running
   ansible.builtin.systemd:

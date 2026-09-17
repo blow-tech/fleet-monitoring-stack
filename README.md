@@ -3,6 +3,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Ansible](https://img.shields.io/badge/ansible-role%20included-red.svg)
 ![Docker](https://img.shields.io/badge/docker-compose-blue.svg)
+![CI](https://github.com/blow-tech/fleet-monitoring-stack/actions/workflows/ci.yml/badge.svg)
 
 A containerized Prometheus/Grafana/Alertmanager monitoring stack, deployed
 and kept in sync across a fleet of 10-20+ RHEL VMs by Ansible. Add or remove
@@ -162,6 +163,20 @@ Grafana: `http://localhost:3000` · Prometheus: `http://localhost:9090` ·
 Alertmanager: `http://localhost:9093`. The bundled `prometheus.yml` has
 placeholder fleet targets — edit it directly for standalone use, or use
 the Ansible role for the real templated version.
+
+## Continuous integration
+
+Every push/PR runs via GitHub Actions (`.github/workflows/ci.yml`):
+- `yamllint` across `ansible/` and `docker/`
+- `ansible-playbook --syntax-check` against the full playbook
+- `ansible-lint` (currently non-blocking — see note below)
+- `docker compose config` validation against the Compose file
+- JSON validation of the provisioned Grafana dashboard(s)
+
+`ansible-lint` currently reports 18 non-blocking, low-severity findings
+(mostly `var-naming[no-role-prefix]`, a style convention, and a handful of
+`no-handler` suggestions for tasks that are deliberately sequential rather
+than event-triggered). These are tracked, not hidden — see open issues.
 
 ## Notes / limitations
 

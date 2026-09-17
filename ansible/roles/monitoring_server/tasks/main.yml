@@ -112,7 +112,7 @@
     - "3000"  # Grafana
     - "9090"  # Prometheus
     - "9093"  # Alertmanager
-  notify: reload firewalld
+  notify: Reload firewalld
 
 - name: Flush handlers so compose files are in place before starting the stack
   ansible.builtin.meta: flush_handlers
