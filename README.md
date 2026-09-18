@@ -3,6 +3,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Ansible](https://img.shields.io/badge/ansible-role%20included-red.svg)
 ![Docker](https://img.shields.io/badge/docker-compose-blue.svg)
+![Kubernetes](https://img.shields.io/badge/kubernetes-ArgoCD%20%2B%20Istio-326ce5.svg)
 ![CI](https://github.com/blow-tech/fleet-monitoring-stack/actions/workflows/ci.yml/badge.svg)
 
 A containerized Prometheus/Grafana/Alertmanager monitoring stack, deployed
@@ -14,6 +15,11 @@ Built as a companion to [linux-audit-toolkit](https://github.com/blow-tech/linux
 that project audits individual hosts on a schedule; this one gives you a
 live, always-on view across the whole fleet.
 
+**Two deployment paths, same monitoring goal:** this README covers the
+VM/Ansible path below. For a Kubernetes cluster instead — deployed via
+ArgoCD GitOps with Istio service mesh (mTLS, ingress gateway) — see
+[`k8s/README.md`](k8s/README.md).
+
 ## Contents
 
 - [What this actually does](#what-this-actually-does)
@@ -24,6 +30,7 @@ live, always-on view across the whole fleet.
 - [Scaling the fleet](#scaling-the-fleet)
 - [What common_baseline actually changes on every host](#what-common_baseline-actually-changes-on-every-host)
 - [Manual / standalone use of the Docker stack](#manual--standalone-use-of-the-docker-stack)
+- [Kubernetes-native alternative (ArgoCD + Istio)](#kubernetes-native-alternative-argocd--istio)
 - [Continuous integration](#continuous-integration)
 - [Roadmap](#roadmap)
 - [Notes / limitations](#notes--limitations)
@@ -179,14 +186,33 @@ Alertmanager: `http://localhost:9093`. The bundled `prometheus.yml` has
 placeholder fleet targets — edit it directly for standalone use, or use
 the Ansible role for the real templated version.
 
+## Kubernetes-native alternative (ArgoCD + Istio)
+
+If you're targeting a Kubernetes cluster instead of a VM fleet, `k8s/`
+deploys the same monitoring goal via GitOps: ArgoCD watches this repo and
+syncs the community `kube-prometheus-stack` Helm chart plus Istio (base +
+control plane + ingress gateway), with STRICT mTLS enforced between every
+pod in the `monitoring` namespace and Grafana exposed through an Istio
+Gateway/VirtualService rather than a NodePort.
+
+Full setup, prerequisites, and the sync-wave architecture diagram:
+**[k8s/README.md](k8s/README.md)**.
+
+Every manifest in `k8s/` is validated in CI (see below) against real
+upstream Kubernetes/Istio/ArgoCD schemas with `kubeconform -strict` — not
+just checked for YAML syntax.
+
 ## Continuous integration
 
 Every push/PR runs via GitHub Actions (`.github/workflows/ci.yml`):
-- `yamllint` across `ansible/` and `docker/`
+- `yamllint` across `ansible/`, `docker/`, and `k8s/`
 - `ansible-playbook --syntax-check` against the full playbook
 - `ansible-lint` (currently non-blocking — see note below)
 - `docker compose config` validation against the Compose file
 - JSON validation of the provisioned Grafana dashboard(s)
+- `kubeconform -strict` validation of every manifest in `k8s/` against real
+  Kubernetes/Istio/ArgoCD schemas (via
+  [datreeio/CRDs-catalog](https://github.com/datreeio/CRDs-catalog))
 
 `ansible-lint` currently reports 18 non-blocking, low-severity findings —
 mostly `var-naming[no-role-prefix]` (a style convention for role variable
@@ -214,6 +240,10 @@ priority order:
 - [ ] Auto-import a curated set of community Grafana dashboards (e.g. Node
       Exporter Full) via the Grafana HTTP API during provisioning, instead
       of requiring manual import
+- [ ] Spin up a `kind`/`k3d` cluster in CI to actually apply the `k8s/`
+      manifests end-to-end (ArgoCD sync + Istio mesh + Helm release), not
+      just schema-validate them — the VM path has a real dry-run behind
+      it (see [Architecture](#architecture)); the Kubernetes path doesn't yet
 
 ## Notes / limitations
 

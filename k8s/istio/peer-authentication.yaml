@@ -1,0 +1,13 @@
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: monitoring
+spec:
+  # STRICT: every pod-to-pod connection inside this namespace must be
+  # mTLS-encrypted via the sidecar. No plaintext fallback. This is the
+  # actual "Istio thing" that a Docker Compose stack has no equivalent
+  # for — automatic, cert-rotated, mesh-enforced service-to-service TLS
+  # without any application code changes.
+  mtls:
+    mode: STRICT

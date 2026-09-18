@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: istio-system
+  labels:
+    # Control plane namespace does NOT get sidecar-injected — istiod
+    # manages the mesh, it isn't a mesh member itself.
+    istio-injection: disabled

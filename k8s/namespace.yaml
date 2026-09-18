@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    # Enables automatic Istio sidecar injection for every pod in this
+    # namespace — this is what actually puts pods "in the mesh."
+    istio-injection: enabled

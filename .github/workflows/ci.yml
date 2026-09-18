@@ -15,7 +15,7 @@ jobs:
       - name: Install yamllint
         run: pip install yamllint
       - name: Lint all YAML files
-        run: yamllint ansible docker
+        run: yamllint ansible docker k8s
 
   ansible-syntax-check:
     name: Ansible syntax check
@@ -61,3 +61,23 @@ jobs:
             echo "Checking $f"
             python3 -m json.tool "$f" > /dev/null
           done
+
+  k8s-manifest-validate:
+    name: Kubernetes/ArgoCD/Istio manifest validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kubeconform
+        run: |
+          curl -sL -o kubeconform.tar.gz \
+            "https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz"
+          tar xzf kubeconform.tar.gz
+          chmod +x kubeconform
+      - name: Validate plain Kubernetes resources
+        run: ./kubeconform -summary -strict k8s/namespace.yaml k8s/istio-namespace.yaml
+      - name: Validate ArgoCD Application + Istio CRD resources
+        run: |
+          ./kubeconform -summary -strict \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            k8s/argocd/app-of-apps.yaml k8s/argocd/apps/*.yaml k8s/istio/*.yaml

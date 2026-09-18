@@ -1,0 +1,96 @@
+# k8s/helm-values/kube-prometheus-stack-values.yaml
+# Overrides for the prometheus-community/kube-prometheus-stack chart,
+# referenced by k8s/argocd/apps/monitoring.yaml. Grafana is reached through
+# the Istio ingress gateway (k8s/istio/gateway.yaml + virtualservice), not
+# a direct NodePort/LoadBalancer — so both are set to ClusterIP here.
+
+grafana:
+  service:
+    type: ClusterIP
+  # Never commit a real admin password. Create the referenced secret out of
+  # band before syncing this Application:
+  #   kubectl create secret generic grafana-admin-credentials \
+  #     --namespace monitoring \
+  #     --from-literal=admin-user=admin \
+  #     --from-literal=admin-password='YourRealPassword123!'
+  admin:
+    existingSecret: grafana-admin-credentials
+    userKey: admin-user
+    passwordKey: admin-password
+  persistence:
+    enabled: true
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  # Same fleet overview dashboard used in the Docker Compose path — kept as
+  # a ConfigMap-provisioned dashboard so both deployment paths ship the
+  # same view. In a real setup, generate this ConfigMap from
+  # docker/grafana/provisioning/dashboards/json/fleet-overview.json (e.g.
+  # via `kubectl create configmap ... --from-file=...`) rather than
+  # duplicating the JSON by hand here.
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+
+prometheus:
+  service:
+    type: ClusterIP
+  prometheusSpec:
+    retention: 30d
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 50Gi
+    # Discover ServiceMonitors from any namespace, not just kube-system —
+    # lets application teams add their own ServiceMonitor CRs without
+    # needing changes here.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+
+alertmanager:
+  service:
+    type: ClusterIP
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+  config:
+    # Matches the Docker Compose path's default: a documented null receiver
+    # out of the box, real routing left as a deliberate follow-up — see the
+    # main README's Roadmap.
+    route:
+      receiver: "null"
+      group_by: ["alertname", "job"]
+    receivers:
+      - name: "null"
+
+# node-exporter and kube-state-metrics ship as part of this chart already —
+# no separate role/manifest needed the way the Ansible path requires one,
+# since Kubernetes DaemonSets handle "one per node" natively.
+nodeExporter:
+  enabled: true
+
+kubeStateMetrics:
+  enabled: true
+
+defaultRules:
+  # Ship the chart's built-in alerting rule library (node down, disk
+  # pressure, etc.) rather than none — this is the k8s-native equivalent of
+  # the [fleet] threshold checks the Ansible/audit-toolkit path performs
+  # via cron.
+  create: true

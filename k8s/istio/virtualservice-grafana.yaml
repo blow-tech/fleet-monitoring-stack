@@ -1,0 +1,24 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  hosts:
+    - "grafana.example.com"
+  gateways:
+    - fleet-monitoring-gateway
+  http:
+    - route:
+        - destination:
+            # Service name follows the kube-prometheus-stack chart's
+            # release-name convention: <release-name>-grafana. Adjust if
+            # the Helm release is named something other than the chart
+            # default when installed (see monitoring.yaml Application).
+            host: fleet-monitoring-grafana.monitoring.svc.cluster.local
+            port:
+              number: 80
+      timeout: 15s
+      retries:
+        attempts: 2
+        perTryTimeout: 5s
