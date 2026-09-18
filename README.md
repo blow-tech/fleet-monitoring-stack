@@ -14,6 +14,21 @@ Built as a companion to [linux-audit-toolkit](https://github.com/blow-tech/linux
 that project audits individual hosts on a schedule; this one gives you a
 live, always-on view across the whole fleet.
 
+## Contents
+
+- [What this actually does](#what-this-actually-does)
+- [Architecture](#architecture)
+- [Requirements](#requirements)
+- [Quick start](#quick-start)
+- [Secrets](#secrets)
+- [Scaling the fleet](#scaling-the-fleet)
+- [What common_baseline actually changes on every host](#what-common_baseline-actually-changes-on-every-host)
+- [Manual / standalone use of the Docker stack](#manual--standalone-use-of-the-docker-stack)
+- [Continuous integration](#continuous-integration)
+- [Roadmap](#roadmap)
+- [Notes / limitations](#notes--limitations)
+- [License](#license)
+
 ## What this actually does
 
 - **`docker/`** — a self-contained Docker Compose stack: Prometheus,
@@ -173,10 +188,32 @@ Every push/PR runs via GitHub Actions (`.github/workflows/ci.yml`):
 - `docker compose config` validation against the Compose file
 - JSON validation of the provisioned Grafana dashboard(s)
 
-`ansible-lint` currently reports 18 non-blocking, low-severity findings
-(mostly `var-naming[no-role-prefix]`, a style convention, and a handful of
-`no-handler` suggestions for tasks that are deliberately sequential rather
-than event-triggered). These are tracked, not hidden — see open issues.
+`ansible-lint` currently reports 18 non-blocking, low-severity findings —
+mostly `var-naming[no-role-prefix]` (a style convention for role variable
+prefixes) and a handful of `no-handler` suggestions for tasks that are
+deliberately sequential rather than event-triggered. Left non-blocking for
+now rather than suppressed, since none affect correctness; see the
+[Roadmap](#roadmap) for the plan to burn these down.
+
+## Roadmap
+
+Things I'd add before calling this fully production-ready, in rough
+priority order:
+
+- [ ] **Molecule tests** for each role (currently validated via
+      `--syntax-check` + a manual local dry-run, not automated functional
+      testing against real containers/VMs)
+- [ ] Wire a real Alertmanager receiver (Slack/PagerDuty) by default behind
+      a feature flag, instead of shipping only the `null` receiver
+- [ ] TLS termination in front of Grafana (Caddy or nginx reverse proxy)
+      rather than plain HTTP on 3000
+- [ ] Prometheus remote-write to long-term storage (Thanos/Mimir) as an
+      optional role, for retention beyond local disk
+- [ ] Burn down the remaining `ansible-lint` findings and flip that CI job
+      from non-blocking to a hard failure
+- [ ] Auto-import a curated set of community Grafana dashboards (e.g. Node
+      Exporter Full) via the Grafana HTTP API during provisioning, instead
+      of requiring manual import
 
 ## Notes / limitations
 
