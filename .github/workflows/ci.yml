@@ -35,9 +35,7 @@ jobs:
       - name: ansible-lint
         run: |
           pip install ansible-lint
-          ansible-lint ansible/playbook.yml || true
-        # non-blocking for now — flip to a hard failure once the existing
-        # findings are triaged and the role set stabilizes
+          ansible-lint --profile basic ansible/playbook.yml
 
   compose-validate:
     name: Docker Compose config validation
