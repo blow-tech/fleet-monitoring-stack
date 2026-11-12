@@ -4,11 +4,11 @@ node_exporter installation now depends on actual desired-version state, not whet
 
 Nothing deployed. Local YAML/source checks do not validate package/firewall/service behavior. Required lab: checksum mismatch, interrupted download/copy, same-version rerun, upgrade/restart, RHEL package/firewall inventory. Trust upstream release checksums and pin approved versions; do not invent a digest. Existing broad baseline configuration, Kubernetes policy and dependency pinning require environment review. No benchmark claims.
 
-Local validation: YAML parsing; VMware PowerCLI connection-scope/failure/WWPN/JSON fixtures passed in PowerShell 7.4.13 for the migration repository. Windows versions and Ansible contracts are checked by the PR CI; infrastructure integration remains unverified.
+Local validation and PR CI use syntax/static checks only, plus mocked storage preflight where applicable; infrastructure integration remains unverified.
 
 ## Variable migration (breaking)
 
-Role variables and registered results now use role prefixes; update external inventory/Vault overrides before applying. All in-repository references were migrated. The shared iscsi_target_name intentionally retains one value across both roles.
+Role variables and registered results now use role prefixes; update external inventory/Vault overrides before applying. All in-repository references were migrated.
 
 | Previous variable | Replacement |
 |---|---|
@@ -27,4 +27,6 @@ Role variables and registered results now use role prefixes; update external inv
 | `monitoring_install_dir` | `monitoring_server_monitoring_install_dir` |
 | `selinux_result` | `common_baseline_selinux_result` |
 
-Validation update: local yamllint, Ansible syntax check and ansible-lint basic profile pass after migrating role-variable names. CI no longer suppresses lint failures. Lab storage preflight fixtures reject unrelated RAW/system/boot disks and invalid manifests; Windows PowerShell array handling was corrected from CI evidence. No infrastructure play was executed.
+Validation update: local yamllint, Ansible syntax check and ansible-lint basic profile pass after migrating role-variable names. CI no longer suppresses lint failures. No infrastructure play was executed.
+
+Grafana preflight rejects unchanged placeholder secrets. Supply a protected Vault value using the migrated variable name; no production secret was supplied or tested.
