@@ -1,9 +1,9 @@
 ---
-baseline_timezone: "UTC"
-baseline_ntp_servers: []
-baseline_admin_users: []
-baseline_sudo_nopasswd: false
-baseline_disable_root_ssh_login: true
-baseline_disable_ssh_password_auth: false
-baseline_firewall_extra_services: []
-baseline_enable_dnf_automatic: true
+common_baseline_baseline_timezone: "UTC"
+common_baseline_baseline_ntp_servers: []
+common_baseline_baseline_admin_users: []
+common_baseline_baseline_sudo_nopasswd: false
+common_baseline_baseline_disable_root_ssh_login: true
+common_baseline_baseline_disable_ssh_password_auth: false
+common_baseline_baseline_firewall_extra_services: []
+common_baseline_baseline_enable_dnf_automatic: true

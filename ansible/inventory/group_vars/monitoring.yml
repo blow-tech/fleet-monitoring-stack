@@ -6,4 +6,4 @@
 #  3000 = Grafana, 9090 = Prometheus, 9093 = Alertmanager
 # Restrict source in production (e.g. office/VPN CIDR) rather than 0.0.0.0/0 —
 # see roles/monitoring_server/tasks/main.yml for the firewalld rich rules.
-monitoring_allowed_source_cidr: "10.0.0.0/8"
+monitoring_server_monitoring_allowed_source_cidr: "10.0.0.0/8"

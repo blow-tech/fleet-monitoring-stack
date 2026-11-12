@@ -27,7 +27,9 @@
     fail_msg: "This role supports the reviewed linux-amd64 archive only."
 
 - name: Install the desired version with retryable private staging
-  when: node_exporter_current.rc != 0 or ('version ' ~ node_exporter_version ~ ' ') not in ((node_exporter_current.stdout | default('')) ~ ' ' ~ (node_exporter_current.stderr | default('')))
+  when: >-
+    node_exporter_current.rc != 0 or ('version ' ~ node_exporter_version ~ ' ') not in
+    ((node_exporter_current.stdout | default('')) ~ ' ' ~ (node_exporter_current.stderr | default('')))
   block:
     - name: Allocate private staging directory
       ansible.builtin.tempfile:
@@ -37,7 +39,8 @@
 
     - name: Download and verify archive before extraction
       ansible.builtin.get_url:
-        url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+        url: >-
+          https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
         dest: "{{ node_exporter_stage.path }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
         checksum: "sha256:https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/sha256sums.txt"
         mode: "0600"
