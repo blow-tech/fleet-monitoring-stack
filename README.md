@@ -1,3 +1,5 @@
+> **Pending safety remediation:** read [REMEDIATION-2026-11.md](REMEDIATION-2026-11.md) before using deployment or collection examples. No production validation is implied.
+
 # fleet-monitoring-stack
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
@@ -82,7 +84,7 @@ flowchart LR
 Firewall posture: each fleet VM's `node_exporter` port (9100) only accepts
 connections from the monitoring host's IP, via a firewalld rich rule not
 the whole subnet. Grafana/Prometheus/Alertmanager ports on the monitoring
-host are scoped to `monitoring_allowed_source_cidr` (default `10.0.0.0/8`,
+host are scoped to `monitoring_server_monitoring_allowed_source_cidr` (default `10.0.0.0/8`,
 override per environment).
 
 ## Requirements
@@ -119,19 +121,19 @@ folder for the pre-provisioned "Fleet Overview" dashboard.
 
 ## Secrets
 
-`grafana_admin_password` in `group_vars/all.yml` is a plaintext placeholder
+`monitoring_server_grafana_admin_password` in `group_vars/all.yml` is a plaintext placeholder
 — **replace it before running against real infrastructure.** Use
 `ansible-vault`:
 
 ```bash
-ansible-vault encrypt_string 'YourRealPassword123!' --name 'grafana_admin_password'
+ansible-vault encrypt_string 'YourRealPassword123!' --name 'monitoring_server_grafana_admin_password'
 ```
 
 Paste the resulting block into `group_vars/all.yml` (or a separate
 `group_vars/vault.yml` you `ansible-vault encrypt` wholesale), then run the
 playbook with `--ask-vault-pass` or `--vault-password-file`.
 
-The same applies to `baseline_admin_users[].password_hash` generate real
+The same applies to `common_baseline_baseline_admin_users[].password_hash` generate real
 hashes with:
 ```bash
 python3 -c "import crypt; print(crypt.crypt('changeme', crypt.mksalt(crypt.METHOD_SHA512)))"
@@ -157,9 +159,9 @@ all in one run.
 ## What common_baseline actually changes on every host
 
 - Timezone + NTP (chrony)
-- Admin user accounts (from `baseline_admin_users`) with SSH key auth
+- Admin user accounts (from `common_baseline_baseline_admin_users`) with SSH key auth
 - SSH hardening: root login disabled by default; password auth disable is
-  **opt-in** (`baseline_disable_ssh_password_auth: false` by default) so a
+  **opt-in** (`common_baseline_baseline_disable_ssh_password_auth: false` by default) so a
   first run can't lock you out before you've confirmed key-based access
 - fail2ban on sshd (5 attempts / 10 min → 1hr ban)
 - firewalld enabled with a default-deny posture beyond explicitly opened

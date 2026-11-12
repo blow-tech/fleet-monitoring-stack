@@ -1,5 +1,5 @@
 # Managed by Ansible role common_baseline — do not edit by hand
-{% for server in baseline_ntp_servers %}
+{% for server in common_baseline_baseline_ntp_servers %}
 server {{ server }} iburst
 {% endfor %}
 

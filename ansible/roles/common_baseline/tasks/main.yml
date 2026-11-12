@@ -4,13 +4,13 @@
 # timezone/NTP, admin accounts, SSH hardening (opt-in flags), firewalld
 # default posture, MOTD, and unattended security patching.
 #
-# CAUTION: baseline_disable_ssh_password_auth flips password auth off
+# CAUTION: common_baseline_baseline_disable_ssh_password_auth flips password auth off
 # fleet-wide. Only enable it after confirming key-based access works for
 # every admin user — see the warning in group_vars/all.yml.
 
 - name: Set timezone
   community.general.timezone:
-    name: "{{ baseline_timezone }}"
+    name: "{{ common_baseline_baseline_timezone }}"
 
 - name: Install chrony for NTP
   ansible.builtin.dnf:
@@ -24,7 +24,7 @@
     owner: root
     group: root
     mode: "0644"
-  when: baseline_ntp_servers | length > 0
+  when: common_baseline_baseline_ntp_servers | length > 0
   notify: Restart chronyd
 
 - name: Ensure chronyd is enabled and running
@@ -46,7 +46,7 @@
     password: "{{ item.password_hash }}"
     shell: /bin/bash
     create_home: true
-  loop: "{{ baseline_admin_users }}"
+  loop: "{{ common_baseline_baseline_admin_users }}"
   no_log: true
 
 - name: Deploy SSH authorized_keys for admin users
@@ -54,7 +54,7 @@
     user: "{{ item.name }}"
     key: "{{ item.ssh_authorized_key }}"
     state: present
-  loop: "{{ baseline_admin_users }}"
+  loop: "{{ common_baseline_baseline_admin_users }}"
   when: item.ssh_authorized_key is defined and item.ssh_authorized_key | length > 0
 
 - name: Grant passwordless sudo to opsadmins group (opt-in)
@@ -65,13 +65,13 @@
     group: root
     mode: "0440"
     validate: "visudo -cf %s"
-  when: baseline_sudo_nopasswd | bool
+  when: common_baseline_baseline_sudo_nopasswd | bool
 
 - name: Remove passwordless sudo file if disabled
   ansible.builtin.file:
     path: /etc/sudoers.d/opsadmins
     state: absent
-  when: not (baseline_sudo_nopasswd | bool)
+  when: not (common_baseline_baseline_sudo_nopasswd | bool)
 
 - name: Harden sshd_config — disable direct root login
   ansible.builtin.lineinfile:
@@ -79,7 +79,7 @@
     regexp: '^#?PermitRootLogin'
     line: "PermitRootLogin no"
     validate: "sshd -t -f %s"
-  when: baseline_disable_root_ssh_login | bool
+  when: common_baseline_baseline_disable_root_ssh_login | bool
   notify: Restart sshd
 
 - name: Harden sshd_config — disable password authentication
@@ -88,7 +88,7 @@
     regexp: '^#?PasswordAuthentication'
     line: "PasswordAuthentication no"
     validate: "sshd -t -f %s"
-  when: baseline_disable_ssh_password_auth | bool
+  when: common_baseline_baseline_disable_ssh_password_auth | bool
   notify: Restart sshd
 
 - name: Install fail2ban
@@ -140,13 +140,13 @@
     permanent: true
     state: enabled
     immediate: true
-  loop: "{{ baseline_firewall_extra_services }}"
+  loop: "{{ common_baseline_baseline_firewall_extra_services }}"
 
 - name: Ensure SELinux is enforcing
   ansible.posix.selinux:
     policy: targeted
     state: enforcing
-  register: selinux_result
+  register: common_baseline_selinux_result
   failed_when: false
 
 - name: Warn if SELinux could not be set to enforcing
@@ -154,27 +154,27 @@
     msg: >-
       WARNING: SELinux is not enforcing on {{ inventory_hostname }}.
       Investigate before treating this host as production-hardened.
-  when: selinux_result is failed or (selinux_result.state is defined and selinux_result.state != 'enforcing')
+  when: common_baseline_selinux_result is failed or (common_baseline_selinux_result.state is defined and common_baseline_selinux_result.state != 'enforcing')
 
 - name: Enable dnf-automatic for unattended security patching
   ansible.builtin.dnf:
     name: dnf-automatic
     state: present
-  when: baseline_enable_dnf_automatic | bool
+  when: common_baseline_baseline_enable_dnf_automatic | bool
 
 - name: Configure dnf-automatic for security-only updates
   ansible.builtin.lineinfile:
     path: /etc/dnf/automatic.conf
     regexp: '^upgrade_type'
     line: "upgrade_type = security"
-  when: baseline_enable_dnf_automatic | bool
+  when: common_baseline_baseline_enable_dnf_automatic | bool
 
 - name: Enable dnf-automatic timer
   ansible.builtin.systemd:
     name: dnf-automatic.timer
     enabled: true
     state: started
-  when: baseline_enable_dnf_automatic | bool
+  when: common_baseline_baseline_enable_dnf_automatic | bool
 
 - name: Deploy MOTD banner
   ansible.builtin.template:

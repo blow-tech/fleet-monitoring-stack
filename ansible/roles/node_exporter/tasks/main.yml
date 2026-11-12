@@ -19,43 +19,53 @@
   changed_when: false
   failed_when: false
 
-- name: Download node_exporter checksums file
-  ansible.builtin.get_url:
-    url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/sha256sums.txt"
-    dest: "/tmp/node_exporter_{{ node_exporter_version }}_sha256sums.txt"
-    mode: "0644"
-  when: node_exporter_version not in (node_exporter_current.stderr | default(''))
-  register: node_exporter_checksums
+- name: Validate supported platform before downloading
+  ansible.builtin.assert:
+    that:
+      - ansible_architecture == 'x86_64'
+      - node_exporter_version is match('^[0-9]+\.[0-9]+\.[0-9]+$')
+    fail_msg: "This role supports the reviewed linux-amd64 archive only."
 
-- name: Extract expected checksum for this host's architecture
-  ansible.builtin.shell: >
-    set -o pipefail &&
-    grep "linux-amd64.tar.gz" /tmp/node_exporter_{{ node_exporter_version }}_sha256sums.txt | awk '{print $1}'
-  args:
-    executable: /bin/bash
-  register: node_exporter_expected_sha256
-  changed_when: false
-  when: node_exporter_checksums is changed
+- name: Install the desired version with retryable private staging
+  when: >-
+    node_exporter_current.rc != 0 or ('version ' ~ node_exporter_version ~ ' ') not in
+    ((node_exporter_current.stdout | default('')) ~ ' ' ~ (node_exporter_current.stderr | default('')))
+  block:
+    - name: Allocate private staging directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: node-exporter-
+      register: node_exporter_stage
 
-- name: Download and extract node_exporter (checksum-verified)
-  ansible.builtin.unarchive:
-    src: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
-    dest: /tmp
-    remote_src: true
-    checksum: "sha256:{{ node_exporter_expected_sha256.stdout }}"
-  when: node_exporter_checksums is changed
-  notify: Restart node_exporter
+    - name: Download and verify archive before extraction
+      ansible.builtin.get_url:
+        url: >-
+          https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
+        dest: "{{ node_exporter_stage.path }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+        checksum: "sha256:https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/sha256sums.txt"
+        mode: "0600"
 
-- name: Install node_exporter binary
-  ansible.builtin.copy:
-    src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
-    dest: "{{ node_exporter_install_dir }}/node_exporter"
-    owner: root
-    group: root
-    mode: "0755"
-    remote_src: true
-  when: node_exporter_checksums is changed
-  notify: Restart node_exporter
+    - name: Extract verified local archive
+      ansible.builtin.unarchive:
+        src: "{{ node_exporter_stage.path }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+        dest: "{{ node_exporter_stage.path }}"
+        remote_src: true
+
+    - name: Install node_exporter binary
+      ansible.builtin.copy:
+        src: "{{ node_exporter_stage.path }}/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
+        dest: "{{ node_exporter_install_dir }}/node_exporter"
+        owner: root
+        group: root
+        mode: "0755"
+        remote_src: true
+      notify: Restart node_exporter
+  always:
+    - name: Remove only this run's private staging directory
+      ansible.builtin.file:
+        path: "{{ node_exporter_stage.path }}"
+        state: absent
+      when: node_exporter_stage.path is defined
 
 - name: Deploy node_exporter systemd unit
   ansible.builtin.template:
@@ -88,12 +98,3 @@
     state: enabled
     immediate: true
   notify: Reload firewalld
-
-- name: Clean up downloaded archive and checksums file
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: absent
-  loop:
-    - "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64"
-    - "/tmp/node_exporter_{{ node_exporter_version }}_sha256sums.txt"
-  when: node_exporter_checksums is changed
